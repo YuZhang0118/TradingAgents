@@ -1,0 +1,67 @@
+name: TradingAgents research-only NVDA (manual pilot)
+run-name: TradingAgents research pilot - NVDA - no trading
+on:
+  push:
+    branches:
+      - research-only-20261023
+    paths:
+      - .github/workflows/research-only-nvda.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  full-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      TRADINGAGENTS_RESULTS_DIR: ${{ github.workspace }}/research-output
+      TRADINGAGENTS_CACHE_DIR: ${{ github.workspace }}/research-cache
+      TRADINGAGENTS_OUTPUT_LANGUAGE: Chinese
+      TRADINGAGENTS_MAX_DEBATE_ROUNDS: "1"
+      TRADINGAGENTS_MAX_RISK_ROUNDS: "1"
+      TRADINGAGENTS_MAX_TOOL_ROUNDS: "8"
+      TRADINGAGENTS_CHECKPOINT_ENABLED: "false"
+    steps:
+      - name: Checkout this research-only branch
+        uses: actions/checkout@v4
+      - name: Configure Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install full TradingAgents application
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          tradingagents --help > /dev/null
+      - name: Run research-team analysis, bull-bear debate, trader, risk and PM
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$DEEPSEEK_API_KEY" ]]; then
+            export TRADINGAGENTS_LLM_PROVIDER=deepseek
+            export TRADINGAGENTS_QUICK_THINK_LLM=deepseek-chat
+            export TRADINGAGENTS_DEEP_THINK_LLM=deepseek-chat
+            echo "Provider: DeepSeek (configured repository secret)"
+          elif [[ -n "$OPENAI_API_KEY" ]]; then
+            export TRADINGAGENTS_LLM_PROVIDER=openai
+            export TRADINGAGENTS_QUICK_THINK_LLM=gpt-4o-mini
+            export TRADINGAGENTS_DEEP_THINK_LLM=gpt-4o
+            echo "Provider: OpenAI (configured repository secret)"
+          else
+            echo "::error::No model API key configured. Set DEEPSEEK_API_KEY or OPENAI_API_KEY as a repository Actions secret and re-run this workflow."
+            exit 2
+          fi
+          echo "Scope: research only, public NVDA market data; no IBKR credentials, no portfolio, no live orders."
+          tradingagents --ticker NVDA --date 2026-10-22 --analysts market,sentiment,news,fundamentals --save --no-show
+      - name: Archive research reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tradingagents-nvda-20261022
+          path: research-output/
+          if-no-files-found: ignore
+          retention-days: 7
