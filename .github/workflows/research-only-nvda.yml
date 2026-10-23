@@ -26,6 +26,29 @@ jobs:
       TRADINGAGENTS_MAX_TOOL_ROUNDS: "8"
       TRADINGAGENTS_CHECKPOINT_ENABLED: "false"
     steps:
+      - name: Validate secret is a single key, not a pasted list
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$DEEPSEEK_API_KEY" ]]; then
+            provider_key="$DEEPSEEK_API_KEY"
+            label="DEEPSEEK_API_KEY"
+          elif [[ -n "$OPENAI_API_KEY" ]]; then
+            provider_key="$OPENAI_API_KEY"
+            label="OPENAI_API_KEY"
+          else
+            echo "::error::Neither supported provider key is configured."
+            exit 2
+          fi
+          if [[ "$provider_key" =~ [[:space:]] ]]; then
+            echo "::error::$label contains whitespace, possibly multiple pasted lines. Replace the secret's value with exactly one newly issued API key (no newline, label, quotes or spaces)."
+            exit 3
+          fi
+          if [[ "$provider_key" == *"="* ]]; then
+            echo "::error::$label appears to include a KEY=VALUE assignment. Save only the raw API key as the secret value."
+            exit 3
+          fi
+          echo "Secret format check passed for $label (value not printed)."
       - name: Checkout this research-only branch
         uses: actions/checkout@v4
       - name: Configure Python 3.12
