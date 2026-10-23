@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.DEEPSEEK_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       TRADINGAGENTS_RESULTS_DIR: ${{ github.workspace }}/research-output
       TRADINGAGENTS_CACHE_DIR: ${{ github.workspace }}/research-cache
@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$OPENAI_API_KEY" ]]; then
-            echo "::error::No OpenAI key found under OPENAI_API_KEY or legacy DEEPSEEK_API_KEY. Add an actual OpenAI API key via repository Actions Secrets."
+            echo "::error::No OPENAI_API_KEY found in this repository Actions secrets. Add an OpenAI Platform API key to OPENAI_API_KEY."
             exit 2
           fi
           if [[ "$OPENAI_API_KEY" =~ [[:space:]] ]] || [[ "$OPENAI_API_KEY" == *"="* ]]; then
