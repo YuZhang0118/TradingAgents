@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.DEEPSEEK_API_KEY }}
       ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       TRADINGAGENTS_RESULTS_DIR: ${{ github.workspace }}/research-output
       TRADINGAGENTS_CACHE_DIR: ${{ github.workspace }}/research-cache
@@ -26,29 +25,19 @@ jobs:
       TRADINGAGENTS_MAX_TOOL_ROUNDS: "8"
       TRADINGAGENTS_CHECKPOINT_ENABLED: "false"
     steps:
-      - name: Validate secret is a single key, not a pasted list
+      - name: Validate OpenAI key formatting without disclosing it
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "$DEEPSEEK_API_KEY" ]]; then
-            provider_key="$DEEPSEEK_API_KEY"
-            label="DEEPSEEK_API_KEY"
-          elif [[ -n "$OPENAI_API_KEY" ]]; then
-            provider_key="$OPENAI_API_KEY"
-            label="OPENAI_API_KEY"
-          else
-            echo "::error::Neither supported provider key is configured."
+          if [[ -z "$OPENAI_API_KEY" ]]; then
+            echo "::error::No OpenAI key found under OPENAI_API_KEY or legacy DEEPSEEK_API_KEY. Add an actual OpenAI API key via repository Actions Secrets."
             exit 2
           fi
-          if [[ "$provider_key" =~ [[:space:]] ]]; then
-            echo "::error::$label contains whitespace, possibly multiple pasted lines. Replace the secret's value with exactly one newly issued API key (no newline, label, quotes or spaces)."
+          if [[ "$OPENAI_API_KEY" =~ [[:space:]] ]] || [[ "$OPENAI_API_KEY" == *"="* ]]; then
+            echo "::error::Configured key is not a single raw token. Use exactly one API key without whitespace or KEY=VALUE syntax."
             exit 3
           fi
-          if [[ "$provider_key" == *"="* ]]; then
-            echo "::error::$label appears to include a KEY=VALUE assignment. Save only the raw API key as the secret value."
-            exit 3
-          fi
-          echo "Secret format check passed for $label (value not printed)."
+          echo "OpenAI credential format present; model authentication still requires actual API request."
       - name: Checkout this research-only branch
         uses: actions/checkout@v4
       - name: Configure Python 3.12
@@ -62,23 +51,13 @@ jobs:
           tradingagents --help > /dev/null
       - name: Run research-team analysis, bull-bear debate, trader, risk and PM
         shell: bash
+        env:
+          TRADINGAGENTS_LLM_PROVIDER: openai
+          TRADINGAGENTS_QUICK_THINK_LLM: gpt-4o-mini
+          TRADINGAGENTS_DEEP_THINK_LLM: gpt-4o
         run: |
           set -euo pipefail
-          if [[ -n "$DEEPSEEK_API_KEY" ]]; then
-            export TRADINGAGENTS_LLM_PROVIDER=deepseek
-            export TRADINGAGENTS_QUICK_THINK_LLM=deepseek-chat
-            export TRADINGAGENTS_DEEP_THINK_LLM=deepseek-chat
-            echo "Provider: DeepSeek (configured repository secret)"
-          elif [[ -n "$OPENAI_API_KEY" ]]; then
-            export TRADINGAGENTS_LLM_PROVIDER=openai
-            export TRADINGAGENTS_QUICK_THINK_LLM=gpt-4o-mini
-            export TRADINGAGENTS_DEEP_THINK_LLM=gpt-4o
-            echo "Provider: OpenAI (configured repository secret)"
-          else
-            echo "::error::No model API key configured. Set DEEPSEEK_API_KEY or OPENAI_API_KEY as a repository Actions secret and re-run this workflow."
-            exit 2
-          fi
-          echo "Scope: research only, public NVDA market data; no IBKR credentials, no portfolio, no live orders."
+          echo "Provider: OpenAI; research-only public NVDA market data, no IBKR credentials, no portfolio, no live trading."
           tradingagents --ticker NVDA --date 2026-10-22 --analysts market,sentiment,news,fundamentals --save --no-show
       - name: Archive research reports
         if: always()
